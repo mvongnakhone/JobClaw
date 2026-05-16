@@ -259,6 +259,16 @@
   line-height: 1.6;
 }
 
+.event-policy_check             { border-left-color: #00b4d8; }
+.event-policy_check .event-tag,
+.tag-policy                     { color: #00b4d8; }
+
+.policy-status {
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 8px;
+}
+
 .event-error             { border-left-color: var(--red); }
 .event-error .event-tag,
 .tag-error               { color: var(--red); }

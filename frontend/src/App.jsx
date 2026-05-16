@@ -153,7 +153,7 @@ export default function App() {
 
       <footer className="footer">
         <span>
-          integration point: <code>backend/agent.py</code> · swap the stub for NemoClaw + Nemotron when ready.
+          powered by <code>NemoClaw</code> + <code>Nemotron</code> · policy enforced by OpenShell
         </span>
       </footer>
     </div>
@@ -196,6 +196,17 @@ function EventRow({ event }) {
       <>
         <span className="event-tag tag-final">final</span>
         <span className="event-body event-final-body">{event.content}</span>
+      </>
+    )
+  }
+  if (event.type === 'policy_check') {
+    return (
+      <>
+        <span className="event-tag tag-policy">policy</span>
+        <span className="event-body">
+          <span className="policy-status">{event.status}</span>
+          <span className="tool-args">{event.policy}</span>
+        </span>
       </>
     )
   }
