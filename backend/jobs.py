@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from supabase import create_client
 from typing import Annotated
 
-from agent.analyzer import analyze_job
+from agent.analyzer import analyze_jobs_batch
 from auth import get_current_user
 
 log = logging.getLogger("jobs")
@@ -106,14 +106,8 @@ async def _run_analysis(email: str, profile: dict, db_rows: list[dict]) -> None:
     """Score and rank experiences for a list of job_listings rows (by DB id)."""
     if not db_rows:
         return
-    analyses = await asyncio.gather(
-        *[analyze_job(profile, row) for row in db_rows],
-        return_exceptions=True,
-    )
+    analyses = await analyze_jobs_batch(profile, db_rows)
     for row, analysis in zip(db_rows, analyses):
-        if isinstance(analysis, Exception):
-            log.exception("_run_analysis: failed to analyze job id=%s", row.get("id"))
-            continue
         try:
             _db.table("job_listings").update({
                 "compatibility_score": analysis["compatibility_score"],
