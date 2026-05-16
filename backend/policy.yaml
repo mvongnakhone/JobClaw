@@ -1,0 +1,56 @@
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_write:
+    - /tmp
+    - /sandbox
+  read_only:
+    - /app
+    - /etc
+    - /usr
+
+landlock:
+  compatibility: best_effort
+
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+network_policies:
+  # Nemotron inference via NVIDIA Endpoints — required for agent reasoning
+  nvidia_inference:
+    name: nvidia_inference
+    endpoints:
+      - host: integrate.api.nvidia.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: POST, path: "/v1/chat/completions" }
+          - allow: { method: GET,  path: "/v1/models" }
+          - allow: { method: GET,  path: "/v1/models/**" }
+    binaries:
+      - { path: /usr/bin/python3 }
+      - { path: /usr/local/bin/python3 }
+
+  # Tavily web search — scoped to /search only
+  # (intentionally excludes /extract and /crawl for demo)
+  tavily_search:
+    name: tavily_search
+    endpoints:
+      - host: api.tavily.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow: { method: POST, path: "/search" }
+    binaries:
+      - { path: /usr/bin/python3 }
+      - { path: /usr/local/bin/python3 }
+
+# Everything else (api.github.com, openai.com, etc.) is denied by default.
+# To demo a live block, run: curl -sS https://api.github.com/zen from inside the sandbox.
+# To hot-reload a new host in: openshell policy update agent-app-sandbox \
+#   --add-endpoint api.github.com:443:read-only:rest:enforce \
+#   --binary /usr/bin/python3 --wait

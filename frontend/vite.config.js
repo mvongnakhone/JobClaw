@@ -6,9 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/run': 'http://localhost:8000',
-      '/health': 'http://localhost:8000',
-      '/profile': 'http://localhost:8000',
+      '/run': process.env.BACKEND_URL || 'http://localhost:8000',
+      '/health': process.env.BACKEND_URL || 'http://localhost:8000',
+      '/profile': process.env.BACKEND_URL || 'http://localhost:8000',
     },
   },
 })

@@ -2,7 +2,5 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 python-dotenv>=1.0.0
 supabase>=2.0.0
-
-# Add when integrating NemoClaw / Nemotron:
-# httpx>=0.27.0          # if calling Nemotron via build.nvidia.com
-# openai>=1.50.0         # if using OpenAI-compatible SDK against NVIDIA endpoints
+openai>=1.50.0
+httpx>=0.27.0

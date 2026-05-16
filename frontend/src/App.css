@@ -656,6 +656,26 @@ body {
   color: var(--ink); font-size: 13px; font-weight: 500;
   transition: .15s;
 }
+
+.event-policy_check             { border-left-color: #00b4d8; }
+.event-policy_check .event-tag,
+.tag-policy                     { color: #00b4d8; }
+
+.policy-status {
+  color: var(--accent);
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.event-error             { border-left-color: var(--red); }
+.event-error .event-tag,
+.tag-error               { color: var(--red); }
+
+.event-body {
+  flex: 1;
+  word-break: break-word;
+  min-width: 0;
+}
 .skill-pill:hover { border-color: var(--purple); color: var(--purple); }
 .skill-x { color: var(--muted2); font-size: 10px; cursor: pointer; line-height: 1; }
 .skill-x:hover { color: var(--red); }
