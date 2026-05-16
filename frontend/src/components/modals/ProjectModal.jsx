@@ -3,7 +3,7 @@ import Modal from "../Modal";
 
 export default function ProjectModal({ data, onClose, onSave }) {
   const [f, setF] = useState({
-    name:"", url:"", desc:"", tags:"",
+    name:"", url:"", desc:"",
     ...data,
     tags: Array.isArray(data.tags) ? data.tags.join(", ") : (data.tags || ""),
   });

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import './App.css';
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import Home      from "./pages/Home";
+import Login     from "./pages/Login";
 import Profile   from "./pages/Profile";
 import AgentTest from "./pages/AgentTest";
 
@@ -10,8 +12,13 @@ const NAV = [
   { id:"agent",   label:"Agent ⚡" },
 ];
 
-export default function App() {
+function Shell() {
   const [page, setPage] = useState("home");
+  const { user, loading, signOut } = useAuth();
+
+  if (loading) return <div className="shell" style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"100vh", color:"var(--muted)" }}>Loading…</div>;
+  if (!user)   return <Login />;
+
   return (
     <div className="shell">
       <nav className="nav">
@@ -27,12 +34,23 @@ export default function App() {
           ))}
         </div>
         <div className="nav-right">
-          <div className="nav-avatar" onClick={() => setPage("profile")}>J</div>
+          <div className="nav-avatar" onClick={() => setPage("profile")} title={user.email}>
+            {user.email?.[0]?.toUpperCase() ?? "?"}
+          </div>
+          <button className="nav-link" onClick={signOut} style={{ fontSize: 13 }}>Sign out</button>
         </div>
       </nav>
       {page === "home"    && <Home      onNav={setPage} />}
       {page === "profile" && <Profile />}
       {page === "agent"   && <AgentTest />}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Shell />
+    </AuthProvider>
   );
 }
