@@ -1,3 +1,19 @@
+export function isProfileComplete(p) {
+  const prefs = p.job_prefs || {};
+  const hasActivity = (
+    (p.experience?.length  >= 1) ||
+    (p.projects?.length    >= 1) ||
+    (p.volunteering?.length >= 1)
+  );
+  return !!(
+    p.name?.trim() &&
+    p.phone?.trim() &&
+    p.location?.trim() &&
+    prefs.roles?.trim() &&
+    hasActivity
+  );
+}
+
 export const TICKER = [
   "📈 94% match at Stripe — your resume is ready",
   "🆕 3 new roles match your profile today",
@@ -19,6 +35,34 @@ export const READY_JOBS = [
   { id:5, logo:"🐙", role:"Senior PM, Dev UX", company:"GitHub", location:"Remote", match:87, salary:"$160–200k" },
 ];
 
+export const INIT_PROFILE = {
+  email:        "",
+  name:         "",
+  phone:        "",
+  location:     "",
+  linkedin_url: "",
+  github_url:   "",
+  headline:     "",
+  portfolio_url:"",
+  twitter_url:  "",
+  education:    [],
+  experience:   [],
+  projects:     [],
+  skills:       [],
+  job_prefs: {
+    roles:        "",
+    work_type:    "",
+    job_type:     "",
+    salary_min:   "",
+    locations:    "",
+    industries:   "",
+    open_to:      "",
+    availability: "",
+  },
+  volunteering: [],
+};
+
+/* Sample data — uncomment to restore for UI testing
 export const INIT_PROFILE = {
   id:           "uuid-placeholder",
   email:        "jane@smith.dev",
@@ -56,3 +100,4 @@ export const INIT_PROFILE = {
     { id:1, role:"Mentor", org:"Out in Tech", start:"Jan 2023", end:"Present", desc:"Mentoring LGBTQ+ professionals transitioning into tech product roles." },
   ],
 };
+*/
