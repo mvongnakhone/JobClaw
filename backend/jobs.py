@@ -18,10 +18,12 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs"
 
 
-def _parse_salary(s: str) -> int | None:
+def _parse_salary(s) -> int | None:
     if not s:
         return None
-    clean = s.lower().replace("k", "000").replace(",", "").replace("$", "")
+    if isinstance(s, (int, float)):
+        return int(s)
+    clean = str(s).lower().replace("k", "000").replace(",", "").replace("$", "")
     m = re.search(r"\d+", clean)
     return int(m.group()) if m else None
 
@@ -86,11 +88,32 @@ def _to_row(result: dict, email: str) -> dict:
     }
 
 
-async def fetch_and_store(email: str, profile: dict) -> int:
+def _above_salary_min(result: dict, salary_min: int | None) -> bool:
+    """Return False only when we have salary data AND it's clearly below the minimum."""
+    if not salary_min:
+        return True
+    sal_min = result.get("salary_min")
+    sal_max = result.get("salary_max")
+    if sal_min is None and sal_max is None:
+        return True  # no salary data — keep it, can't know for sure
+    best = sal_max or sal_min
+    return best >= salary_min
+
+
+async def fetch_and_store(email: str, profile: dict, clear: bool = False) -> int:
     """Fetch from Adzuna, persist new listings, return count of new rows inserted."""
+    if clear:
+        _db.table("job_listings").delete().eq("user_email", email).execute()
+        log.info("fetch_and_store cleared existing listings for %s", email)
+
     results = await _fetch_adzuna(profile)
     if not results:
         return 0
+
+    # Post-filter: drop jobs whose salary data is clearly below the user's minimum
+    prefs = profile.get("job_prefs") or {}
+    salary_min = _parse_salary(prefs.get("salary_min", ""))
+    results = [r for r in results if _above_salary_min(r, salary_min)]
 
     existing = _db.table("job_listings").select("adzuna_id").eq("user_email", email).execute()
     seen = {row["adzuna_id"] for row in (existing.data or [])}
@@ -115,26 +138,33 @@ async def poll_all_users() -> None:
 
 
 @router.get("")
-async def list_jobs(user: Annotated[dict, Depends(get_current_user)]):
-    """Return stored job listings for the current user, newest first."""
+async def list_jobs(
+    user: Annotated[dict, Depends(get_current_user)],
+    limit: int = 20,
+    offset: int = 0,
+):
+    """Return stored job listings for the current user, newest first, with pagination."""
     res = (
         _db.table("job_listings")
         .select("*")
         .eq("user_email", user["email"])
         .order("created_at", desc=True)
-        .limit(50)
+        .range(offset, offset + limit - 1)
         .execute()
     )
     return res.data or []
 
 
 @router.post("/refresh")
-async def refresh_jobs(user: Annotated[dict, Depends(get_current_user)]):
-    """Trigger an immediate Adzuna fetch for the current user."""
+async def refresh_jobs(user: Annotated[dict, Depends(get_current_user)], clear: bool = False):
+    """Trigger an immediate Adzuna fetch for the current user.
+
+    Pass ?clear=true to wipe existing listings first — used when job preferences change.
+    """
     email = user["email"]
     res = _db.table("profiles").select("*").eq("email", email).single().execute()
     profile = res.data
     if not profile:
         return {"new": 0, "error": "profile not found"}
-    new_count = await fetch_and_store(email, profile)
+    new_count = await fetch_and_store(email, profile, clear=clear)
     return {"new": new_count}

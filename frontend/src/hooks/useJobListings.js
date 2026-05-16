@@ -5,7 +5,7 @@ import { apiFetch } from "../lib/api";
 function timeAgo(dateStr) {
   const ms = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(ms / 60000);
-  if (mins < 60) return mins <= 1 ? "just now" : `${mins}m ago`;
+  if (mins < 60) return mins <= 1 ? "just now" : `${mins}min ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;

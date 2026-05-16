@@ -7,6 +7,7 @@ import Home      from "./pages/Home";
 import Login     from "./pages/Login";
 import Profile   from "./pages/Profile";
 import AgentTest from "./pages/AgentTest";
+import Jobs      from "./pages/Jobs";
 
 const NAV = [
   { id:"home",    label:"Home"     },
@@ -70,6 +71,7 @@ function Shell() {
       {navBar(locked)}
       {(locked || page === "profile") && <Profile isLocked={locked} onComplete={onComplete} />}
       {!locked && page === "home"    && <Home onNav={setPage} />}
+      {!locked && page === "jobs"    && <Jobs onNav={setPage} />}
       {!locked && page === "agent"   && <AgentTest />}
     </div>
   );

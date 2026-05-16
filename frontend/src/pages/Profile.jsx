@@ -35,7 +35,14 @@ export default function Profile({ isLocked = false, onComplete }) {
     apiFetch("/profile")
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data) setProfile(prev => ({ ...prev, ...data }));
+        if (data) {
+          setProfile(prev => ({ ...prev, ...data }));
+          lastSearchKey.current = JSON.stringify({
+            job_prefs: data.job_prefs,
+            headline:  data.headline,
+            location:  data.location,
+          });
+        }
         profileLoaded.current = true;
       })
       .catch(() => { profileLoaded.current = true; });
@@ -85,12 +92,16 @@ export default function Profile({ isLocked = false, onComplete }) {
     setProfile(updated);
     checkComplete(updated);
     close();
+    if (data.location !== profile.location) {
+      apiFetch('/jobs/refresh?clear=true', { method: 'POST' }).catch(() => {});
+    }
   }
   function savePrefs(data) {
     const updated = { ...profile, job_prefs: { ...profile.job_prefs, ...data } };
     setProfile(updated);
     checkComplete(updated);
     close();
+    apiFetch('/jobs/refresh?clear=true', { method: 'POST' }).catch(() => {});
   }
   function saveSocial(data) {
     const updated = { ...profile, ...data };

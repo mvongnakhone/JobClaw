@@ -179,7 +179,6 @@ export default function Home({ onNav }) {
               </div>
             ))}
           </div>
-          <div className="see-all-foot"><span className="see-all">see all job listings →</span></div>
         </div>
 
         <div className="u4">
@@ -217,7 +216,7 @@ export default function Home({ onNav }) {
             </div>
           ) : (
             <div className="apply-list">
-              {adzunaJobs.map((job, i) => {
+              {adzunaJobs.slice(0, 10).map((job, i) => {
                 const j = normalizeAdzunaJob(job, i);
                 return (
                   <div key={job.id} className="apply-card">
@@ -246,6 +245,7 @@ export default function Home({ onNav }) {
               })}
             </div>
           )}
+          <div className="see-all-foot"><span className="see-all" onClick={() => onNav("jobs")} style={{ cursor: "pointer" }}>see all job listings →</span></div>
         </div>
       </div>
     </div>
