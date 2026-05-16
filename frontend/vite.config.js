@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       '/run': process.env.BACKEND_URL || 'http://localhost:8000',
       '/health': process.env.BACKEND_URL || 'http://localhost:8000',
+      '/profile': process.env.BACKEND_URL || 'http://localhost:8000',
     },
   },
 })
