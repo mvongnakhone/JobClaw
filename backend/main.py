@@ -2,12 +2,13 @@
 import json
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from agent import run_agent
+from profile import Profile, save_profile, get_profile
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("agent-runner")
@@ -33,6 +34,20 @@ class TaskRequest(BaseModel):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/profile")
+async def create_profile(profile: Profile):
+    saved = save_profile(profile)
+    return {"status": "ok", "data": saved}
+
+
+@app.get("/profile/{email}")
+async def read_profile(email: str):
+    data = get_profile(email)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return data
 
 
 @app.post("/run")

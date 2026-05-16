@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import './App.css';
 
 /* ─────────────────────────────────────────────
@@ -337,6 +337,28 @@ function Profile() {
   const [profile, setProfile] = useState(INIT_PROFILE);
   const [modal, setModal]     = useState(null);
   const [skillInput, setSkillInput] = useState("");
+  const profileLoaded = useRef(false);
+
+  // Load profile from backend on mount
+  useEffect(() => {
+    fetch(`/profile/${INIT_PROFILE.email}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) setProfile(prev => ({ ...prev, ...data }));
+        profileLoaded.current = true;
+      })
+      .catch(() => { profileLoaded.current = true; });
+  }, []);
+
+  // Auto-save to backend whenever profile changes (skips the initial load)
+  useEffect(() => {
+    if (!profileLoaded.current) return;
+    fetch('/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    }).catch(err => console.error('Profile save failed:', err));
+  }, [profile]);
 
   const close     = () => setModal(null);
   const openModal = (type, data = {}) => setModal({ type, data });
