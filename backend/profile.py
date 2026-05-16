@@ -1,9 +1,16 @@
-"""Profile model and Supabase CRUD helpers."""
+import os
 from typing import Any
+
+from dotenv import load_dotenv
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from db import supabase_client
+from supabase import create_client
+
+load_dotenv()
+_db = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
 TABLE = "profiles"
+router = APIRouter()
 
 
 class Profile(BaseModel):
@@ -24,22 +31,15 @@ class Profile(BaseModel):
     volunteering: list[Any] = []
 
 
-def save_profile(profile: Profile) -> dict:
-    data = profile.model_dump()
-    result = (
-        supabase_client.table(TABLE)
-        .upsert(data, on_conflict="email")
-        .execute()
-    )
-    return result.data[0] if result.data else {}
+@router.post("/profile")
+async def create_profile(profile: Profile):
+    result = _db.table(TABLE).upsert(profile.model_dump(), on_conflict="email").execute()
+    return {"status": "ok", "data": result.data[0] if result.data else {}}
 
 
-def get_profile(email: str) -> dict | None:
-    result = (
-        supabase_client.table(TABLE)
-        .select("*")
-        .eq("email", email)
-        .single()
-        .execute()
-    )
+@router.get("/profile/{email}")
+async def read_profile(email: str):
+    result = _db.table(TABLE).select("*").eq("email", email).single().execute()
+    if result.data is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
     return result.data
