@@ -1,10 +1,64 @@
+import { useState, useEffect } from "react";
 import { TICKER, TODAY_MATCHES, READY_JOBS } from "../data/mockData";
+import { apiFetch } from "../lib/api";
 
 function ScoreColor(n) {
   return n >= 90 ? "var(--green)" : n >= 80 ? "var(--amber)" : "var(--red)";
 }
 
+const STATUS_MSG = {
+  thinking:     "Finding your matches…",
+  tool_calling: "Searching job boards…",
+  done:         null,
+  error:        "Couldn't load live jobs — showing examples",
+};
+
 export default function Home({ onNav }) {
+  const [liveJobs, setLiveJobs]       = useState(null);
+  const [agentStatus, setAgentStatus] = useState("thinking");
+
+  useEffect(() => {
+    apiFetch("/find-jobs")
+      .then(async res => {
+        if (!res.ok || !res.body) throw new Error(`server ${res.status}`);
+        const reader = res.body.getReader();
+        const dec    = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const lines = buf.split("\n"); buf = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const ev = JSON.parse(line);
+              if (ev.type === "status") {
+                setAgentStatus(ev.content);
+              } else if (ev.type === "final") {
+                try {
+                  const parsed = JSON.parse(ev.content);
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setLiveJobs(parsed.map((j, i) => ({ ...j, id: i + 1 })));
+                  }
+                } catch {}
+              } else if (ev.type === "error") {
+                setAgentStatus("error");
+              }
+            } catch {}
+          }
+        }
+      })
+      .catch(() => setAgentStatus("error"));
+  }, []);
+
+  const isLoading   = agentStatus === "thinking" || agentStatus === "tool_calling";
+  const statusMsg   = STATUS_MSG[agentStatus] ?? null;
+  const allJobs     = liveJobs ?? [];
+  const matchJobs   = allJobs.length > 0 ? allJobs.slice(0, 3)    : TODAY_MATCHES;
+  const readyJobs   = allJobs.length > 3 ? allJobs.slice(3)       : READY_JOBS;
+  const usingLive   = liveJobs !== null && liveJobs.length > 0;
+
   return (
     <div>
       <div className="home-hero">
@@ -54,31 +108,54 @@ export default function Home({ onNav }) {
         </div>
 
         <div className="u2">
-          <div className="sec-head"><h2>✨ Today's matches</h2></div>
+          <div className="sec-head">
+            <h2>✨ Today's matches</h2>
+            {statusMsg && (
+              <span style={{fontSize:12, color:"var(--muted)", display:"flex", alignItems:"center", gap:6}}>
+                {isLoading && <span className="mc-new-dot" style={{animation:"pulse 1.2s ease-in-out infinite"}}/>}
+                {statusMsg}
+              </span>
+            )}
+            {usingLive && !isLoading && (
+              <span style={{fontSize:12, color:"var(--green)"}}>✓ Live results</span>
+            )}
+          </div>
           <div className="match-grid">
-            {TODAY_MATCHES.map(job => (
-              <div key={job.id} className="match-card">
-                <div className="mc-top">
-                  <div className="mc-logo">{job.logo}</div>
-                  <div style={{textAlign:"right"}}>
-                    <div className="mc-pct" style={{color: ScoreColor(job.match)}}>{job.match}%</div>
-                    <div className="mc-pct-lbl">match</div>
+            {isLoading && liveJobs === null
+              ? [1,2,3].map(i => (
+                  <div key={i} className="match-card" style={{opacity:0.5}}>
+                    <div className="mc-top">
+                      <div className="mc-logo" style={{background:"var(--border2)",borderRadius:8,width:40,height:40}}/>
+                      <div style={{width:40,height:32,background:"var(--border2)",borderRadius:6}}/>
+                    </div>
+                    <div style={{height:14,background:"var(--border2)",borderRadius:4,marginBottom:6,width:"70%"}}/>
+                    <div style={{height:12,background:"var(--border2)",borderRadius:4,width:"50%"}}/>
                   </div>
-                </div>
-                <div className="mc-role">{job.role}</div>
-                <div className="mc-co">{job.company} · {job.location}</div>
-                <div className="mc-tags">
-                  {job.tags.map(t => <span key={t} className="chip chip-p">{t}</span>)}
-                  {job.isNew && <span className="chip chip-g">New</span>}
-                </div>
-                <div className="mc-foot">
-                  <span className="mc-sal">{job.salary}</span>
-                  <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"var(--muted)"}}>
-                    <div className="mc-new-dot"/>{job.posted}
+                ))
+              : matchJobs.map(job => (
+                  <div key={job.id} className="match-card">
+                    <div className="mc-top">
+                      <div className="mc-logo">{job.logo ?? "💼"}</div>
+                      <div style={{textAlign:"right"}}>
+                        <div className="mc-pct" style={{color: ScoreColor(job.match)}}>{job.match}%</div>
+                        <div className="mc-pct-lbl">match</div>
+                      </div>
+                    </div>
+                    <div className="mc-role">{job.role}</div>
+                    <div className="mc-co">{job.company} · {job.location}</div>
+                    <div className="mc-tags">
+                      {(job.tags ?? []).map(t => <span key={t} className="chip chip-p">{t}</span>)}
+                      {job.isNew && <span className="chip chip-g">New</span>}
+                    </div>
+                    <div className="mc-foot">
+                      <span className="mc-sal">{job.salary}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"var(--muted)"}}>
+                        <div className="mc-new-dot"/>{job.posted}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))
+            }
           </div>
           <div style={{marginBottom:32}}/>
         </div>
@@ -86,9 +163,9 @@ export default function Home({ onNav }) {
         <div className="u3">
           <div className="sec-head"><h2>🚀 Ready to apply</h2></div>
           <div className="apply-list">
-            {READY_JOBS.map(job => (
+            {readyJobs.map(job => (
               <div key={job.id} className="apply-card">
-                <div className="apply-logo">{job.logo}</div>
+                <div className="apply-logo">{job.logo ?? "💼"}</div>
                 <div className="apply-info">
                   <div className="apply-role">{job.role}</div>
                   <div className="apply-sub">{job.company} · {job.location} · {job.salary}</div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { INIT_PROFILE } from "../data/mockData";
+import { apiFetch } from "../lib/api";
 import ContactModal    from "../components/modals/ContactModal";
 import SocialModal     from "../components/modals/SocialModal";
 import ExperienceModal from "../components/modals/ExperienceModal";
@@ -15,7 +16,7 @@ export default function Profile() {
   const profileLoaded = useRef(false);
 
   useEffect(() => {
-    fetch(`/profile/${INIT_PROFILE.email}`)
+    apiFetch("/profile")
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data) setProfile(prev => ({ ...prev, ...data }));
@@ -26,9 +27,8 @@ export default function Profile() {
 
   useEffect(() => {
     if (!profileLoaded.current) return;
-    fetch('/profile', {
+    apiFetch('/profile', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
     }).catch(err => console.error('Profile save failed:', err));
   }, [profile]);

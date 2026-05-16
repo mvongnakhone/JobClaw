@@ -46,9 +46,9 @@ SYSTEM_PROMPT = (
 )
 
 
-async def run_agent(task: str) -> AsyncGenerator[dict, None]:
+async def run_agent(task: str, system_prompt: str | None = None) -> AsyncGenerator[dict, None]:
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
         {"role": "user",   "content": task},
     ]
 
