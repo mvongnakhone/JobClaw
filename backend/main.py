@@ -2,8 +2,10 @@
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
 from typing import Annotated
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +15,7 @@ from supabase import create_client
 
 from agent import run_agent
 from auth import get_current_user
+from jobs import router as jobs_router, poll_all_users
 from profile import router as profile_router
 
 load_dotenv()
@@ -21,7 +24,19 @@ _db = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("agent-runner")
 
-app = FastAPI(title="Agent Runner")
+_scheduler = AsyncIOScheduler()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _scheduler.add_job(poll_all_users, "interval", minutes=30, id="job_poll", replace_existing=True)
+    _scheduler.start()
+    log.info("Job poller started — polling Adzuna every 30 minutes")
+    yield
+    _scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="Agent Runner", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +49,7 @@ app.add_middleware(
 )
 
 app.include_router(profile_router)
+app.include_router(jobs_router)
 
 
 class TaskRequest(BaseModel):

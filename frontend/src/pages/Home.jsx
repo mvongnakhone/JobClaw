@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { TICKER, TODAY_MATCHES, READY_JOBS } from "../data/mockData";
 import { apiFetch } from "../lib/api";
+import { useJobListings, normalizeAdzunaJob } from "../hooks/useJobListings";
 
 function ScoreColor(n) {
   return n >= 90 ? "var(--green)" : n >= 80 ? "var(--amber)" : "var(--red)";
@@ -16,6 +17,7 @@ const STATUS_MSG = {
 export default function Home({ onNav }) {
   const [liveJobs, setLiveJobs]       = useState(null);
   const [agentStatus, setAgentStatus] = useState("thinking");
+  const { jobs: adzunaJobs, loading: adzunaLoading, newCount, refresh, clearNewCount } = useJobListings();
 
   useEffect(() => {
     apiFetch("/find-jobs")
@@ -178,6 +180,72 @@ export default function Home({ onNav }) {
             ))}
           </div>
           <div className="see-all-foot"><span className="see-all">see all job listings →</span></div>
+        </div>
+
+        <div className="u4">
+          <div className="sec-head">
+            <h2>
+              📡 Live job feed
+              {newCount > 0 && (
+                <span
+                  className="chip chip-g"
+                  style={{ marginLeft: 8, cursor: "pointer", fontSize: 11 }}
+                  onClick={clearNewCount}
+                >
+                  {newCount} new
+                </span>
+              )}
+            </h2>
+            <button
+              className="hero-btn-ghost"
+              style={{ fontSize: 12, padding: "4px 12px" }}
+              onClick={refresh}
+              disabled={adzunaLoading}
+            >
+              {adzunaLoading ? "Refreshing…" : "↻ Refresh"}
+            </button>
+          </div>
+
+          {adzunaLoading && adzunaJobs.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 13, padding: "16px 0" }}>
+              <span className="mc-new-dot" style={{ marginRight: 6, display: "inline-block" }} />
+              Fetching listings from Adzuna…
+            </div>
+          ) : adzunaJobs.length === 0 ? (
+            <div style={{ color: "var(--muted)", fontSize: 13, padding: "16px 0" }}>
+              No listings yet — add your Adzuna API keys and complete your profile to see live results.
+            </div>
+          ) : (
+            <div className="apply-list">
+              {adzunaJobs.map((job, i) => {
+                const j = normalizeAdzunaJob(job, i);
+                return (
+                  <div key={job.id} className="apply-card">
+                    <div className="apply-logo">💼</div>
+                    <div className="apply-info">
+                      <div className="apply-role">
+                        {j.role}
+                        {j.isNew && (
+                          <span className="chip chip-g" style={{ marginLeft: 8, fontSize: 10 }}>New</span>
+                        )}
+                      </div>
+                      <div className="apply-sub">{j.company} · {j.location} · {j.salary}</div>
+                      <div className="mc-tags" style={{ marginTop: 4 }}>
+                        {j.tags.map(t => <span key={t} className="chip chip-p">{t}</span>)}
+                      </div>
+                    </div>
+                    <div className="apply-right">
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>{j.posted}</div>
+                      {j.url
+                        ? <a href={j.url} target="_blank" rel="noopener noreferrer" className="apply-action">View →</a>
+                        : <button className="apply-action" disabled>View →</button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
