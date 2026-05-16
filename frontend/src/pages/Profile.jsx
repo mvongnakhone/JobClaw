@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { INIT_PROFILE } from "../data/mockData";
+import { INIT_PROFILE, isProfileComplete } from "../data/mockData";
 import { apiFetch } from "../lib/api";
 import ContactModal    from "../components/modals/ContactModal";
 import SocialModal     from "../components/modals/SocialModal";
@@ -9,11 +9,27 @@ import ProjectModal    from "../components/modals/ProjectModal";
 import VolunteeringModal from "../components/modals/VolunteeringModal";
 import PrefsModal      from "../components/modals/PrefsModal";
 
-export default function Profile() {
+function Req({ met }) {
+  return met
+    ? <span title="Complete" style={{ color:"var(--green)", fontSize:11, marginLeft:5 }}>✓</span>
+    : <span title="Required"  style={{ color:"var(--red)",   fontSize:11, marginLeft:5 }}>*</span>;
+}
+
+export default function Profile({ isLocked = false, onComplete }) {
   const [profile, setProfile] = useState(INIT_PROFILE);
   const [modal, setModal]     = useState(null);
   const [skillInput, setSkillInput] = useState("");
   const profileLoaded = useRef(false);
+
+  async function checkComplete(updated) {
+    if (!onComplete || !isProfileComplete(updated)) return;
+    try {
+      await apiFetch('/profile', { method: 'POST', body: JSON.stringify(updated) });
+    } catch (e) {
+      console.error('Profile save failed:', e);
+    }
+    onComplete();
+  }
 
   useEffect(() => {
     apiFetch("/profile")
@@ -38,23 +54,50 @@ export default function Profile() {
 
   function addSkill() {
     const s = skillInput.trim();
-    if (s && !profile.skills.includes(s)) setProfile(p => ({ ...p, skills: [...p.skills, s] }));
+    if (s && !profile.skills.includes(s)) {
+      const updated = { ...profile, skills: [...profile.skills, s] };
+      setProfile(updated);
+      checkComplete(updated);
+    }
     setSkillInput("");
   }
-  function removeSkill(s)       { setProfile(p => ({ ...p, skills: p.skills.filter(x => x !== s) })); }
-  function deleteItem(section, id) { setProfile(p => ({ ...p, [section]: p[section].filter(x => x.id !== id) })); }
+  function removeSkill(s) {
+    const updated = { ...profile, skills: profile.skills.filter(x => x !== s) };
+    setProfile(updated);
+    checkComplete(updated);
+  }
+  function deleteItem(section, id) {
+    const updated = { ...profile, [section]: profile[section].filter(x => x.id !== id) };
+    setProfile(updated);
+    checkComplete(updated);
+  }
   function saveItem(section, item) {
-    setProfile(p => ({
-      ...p,
-      [section]: item.id && p[section].find(x => x.id === item.id)
-        ? p[section].map(x => x.id === item.id ? item : x)
-        : [...p[section], { ...item, id: Date.now() }],
-    }));
+    const newSection = item.id && profile[section].find(x => x.id === item.id)
+      ? profile[section].map(x => x.id === item.id ? item : x)
+      : [...profile[section], { ...item, id: Date.now() }];
+    const updated = { ...profile, [section]: newSection };
+    setProfile(updated);
+    checkComplete(updated);
     close();
   }
-  function saveContact(data) { setProfile(p => ({ ...p, ...data })); close(); }
-  function savePrefs(data)   { setProfile(p => ({ ...p, job_prefs: { ...p.job_prefs, ...data } })); close(); }
-  function saveSocial(data)  { setProfile(p => ({ ...p, ...data })); close(); }
+  function saveContact(data) {
+    const updated = { ...profile, ...data };
+    setProfile(updated);
+    checkComplete(updated);
+    close();
+  }
+  function savePrefs(data) {
+    const updated = { ...profile, job_prefs: { ...profile.job_prefs, ...data } };
+    setProfile(updated);
+    checkComplete(updated);
+    close();
+  }
+  function saveSocial(data) {
+    const updated = { ...profile, ...data };
+    setProfile(updated);
+    checkComplete(updated);
+    close();
+  }
 
   function renderModal() {
     if (!modal) return null;
@@ -69,9 +112,21 @@ export default function Profile() {
     return null;
   }
 
+  const prefs = profile.job_prefs || {};
+
   return (
     <div className="profile-page">
       {renderModal()}
+
+      {isLocked && (
+        <div style={{ background:"var(--amber-p)", border:"1.5px solid var(--amber)", borderRadius:10, padding:"14px 20px", margin:"24px 24px 0", display:"flex", alignItems:"center", gap:12 }}>
+          <span style={{ fontSize:22 }}>👋</span>
+          <div>
+            <div style={{ fontWeight:700, color:"var(--ink)", marginBottom:2 }}>Complete your profile to unlock JobClaw</div>
+            <div style={{ fontSize:13, color:"var(--muted)" }}>Fill in all fields marked with <span style={{ color:"var(--red)", fontWeight:700 }}>*</span> to continue.</div>
+          </div>
+        </div>
+      )}
 
       <div className="profile-hero u0">
         <div className="p-avatar">{(profile.name || "?")[0]}</div>
@@ -100,13 +155,13 @@ export default function Profile() {
         </div>
         <div className="contact-grid">
           {[
-            ["Email",        profile.email],
-            ["Phone",        profile.phone],
-            ["Location",     profile.location],
-            ["Member since", new Date(profile.created_at).toLocaleDateString("en-US",{month:"long",year:"numeric"})],
-          ].map(([k, v]) => (
+            ["Email",        profile.email,    true,  !!profile.email],
+            ["Phone",        profile.phone,    true,  !!profile.phone?.trim()],
+            ["Location",     profile.location, true,  !!profile.location?.trim()],
+            ["Member since", profile.created_at ? new Date(profile.created_at).toLocaleDateString("en-US",{month:"long",year:"numeric"}) : null, false, true],
+          ].map(([k, v, required, met]) => (
             <div key={k} className="contact-row">
-              <div className="c-key">{k}</div>
+              <div className="c-key">{k}{required && <Req met={met} />}</div>
               <div className={`c-val ${v ? "" : "empty"}`}>{v || "Not set"}</div>
             </div>
           ))}
@@ -115,7 +170,7 @@ export default function Profile() {
 
       <div className="p-section u2">
         <div className="p-sec-head">
-          <h3>Job Preferences</h3>
+          <h3>Job Preferences <Req met={!!prefs.roles?.trim()} /></h3>
           <button className="btn btn-ghost btn-sm" onClick={() => openModal("prefs")}>✏️ Edit</button>
         </div>
         <div className="prefs-grid">
@@ -139,7 +194,7 @@ export default function Profile() {
 
       <div className="p-section u3">
         <div className="p-sec-head">
-          <h3>Work Experience</h3>
+          <h3>Work Experience <Req met={profile.experience.length >= 1 || profile.projects?.length >= 1 || profile.volunteering?.length >= 1} /></h3>
           <button className="btn btn-grad btn-sm" onClick={() => openModal("experience", {})}>+ Add</button>
         </div>
         {profile.experience.length === 0 && (
@@ -212,7 +267,7 @@ export default function Profile() {
 
       <div className="p-section u4">
         <div className="p-sec-head">
-          <h3>Projects</h3>
+          <h3>Projects <Req met={profile.experience?.length >= 1 || profile.projects.length >= 1 || profile.volunteering?.length >= 1} /></h3>
           <button className="btn btn-grad btn-sm" onClick={() => openModal("project", {})}>+ Add</button>
         </div>
         {profile.projects.map(proj => (
@@ -240,7 +295,7 @@ export default function Profile() {
 
       <div className="p-section u5">
         <div className="p-sec-head">
-          <h3>Volunteering</h3>
+          <h3>Volunteering <Req met={profile.experience?.length >= 1 || profile.projects?.length >= 1 || profile.volunteering?.length >= 1} /></h3>
           <button className="btn btn-grad btn-sm" onClick={() => openModal("volunteering", {})}>+ Add</button>
         </div>
         {profile.volunteering?.map(v => (
