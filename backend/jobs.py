@@ -1,4 +1,5 @@
 """Adzuna job fetching, storage, and background polling."""
+import asyncio
 import logging
 import os
 import re
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends
 from supabase import create_client
 from typing import Annotated
 
+from agent.analyzer import analyze_job
 from auth import get_current_user
 
 log = logging.getLogger("jobs")
@@ -100,6 +102,48 @@ def _above_salary_min(result: dict, salary_min: int | None) -> bool:
     return best >= salary_min
 
 
+async def _run_analysis(email: str, profile: dict, db_rows: list[dict]) -> None:
+    """Score and rank experiences for a list of job_listings rows (by DB id)."""
+    if not db_rows:
+        return
+    analyses = await asyncio.gather(
+        *[analyze_job(profile, row) for row in db_rows],
+        return_exceptions=True,
+    )
+    for row, analysis in zip(db_rows, analyses):
+        if isinstance(analysis, Exception):
+            log.exception("_run_analysis: failed to analyze job id=%s", row.get("id"))
+            continue
+        try:
+            _db.table("job_listings").update({
+                "compatibility_score": analysis["compatibility_score"],
+                "experience_ranking": analysis["experience_ranking"],
+            }).eq("id", row["id"]).execute()
+            log.info("analyzed job id=%s score=%s for %s", row["id"], analysis["compatibility_score"], email)
+        except Exception:
+            log.exception("_run_analysis: failed to write analysis for job id=%s", row.get("id"))
+
+
+async def _analyze_unscored(email: str, profile: dict) -> None:
+    """Background task: analyze any job listings that are missing a compatibility score."""
+    try:
+        res = (
+            _db.table("job_listings")
+            .select("id, adzuna_id, title, company, description")
+            .eq("user_email", email)
+            .is_("compatibility_score", "null")
+            .execute()
+        )
+        unscored = res.data or []
+    except Exception:
+        log.exception("_analyze_unscored: failed to query unscored rows for %s", email)
+        return
+    if not unscored:
+        return
+    log.info("_analyze_unscored: %d unscored jobs for %s", len(unscored), email)
+    await _run_analysis(email, profile, unscored)
+
+
 async def fetch_and_store(email: str, profile: dict, clear: bool = False) -> int:
     """Fetch from Adzuna, persist new listings, return count of new rows inserted."""
     if clear:
@@ -108,6 +152,8 @@ async def fetch_and_store(email: str, profile: dict, clear: bool = False) -> int
 
     results = await _fetch_adzuna(profile)
     if not results:
+        # Still backfill any pre-existing unscored listings
+        asyncio.create_task(_analyze_unscored(email, profile))
         return 0
 
     # Post-filter: drop jobs whose salary data is clearly below the user's minimum
@@ -120,7 +166,12 @@ async def fetch_and_store(email: str, profile: dict, clear: bool = False) -> int
 
     new_rows = [_to_row(r, email) for r in results if r["id"] not in seen]
     if new_rows:
-        _db.table("job_listings").insert(new_rows).execute()
+        inserted = _db.table("job_listings").insert(new_rows).execute()
+        db_ids = [r["id"] for r in (inserted.data or [])]
+        if db_ids:
+            asyncio.create_task(_run_analysis(email, profile, inserted.data))
+    # Always backfill any older unscored rows too
+    asyncio.create_task(_analyze_unscored(email, profile))
     log.info("fetch_and_store email=%s new=%d", email, len(new_rows))
     return len(new_rows)
 
