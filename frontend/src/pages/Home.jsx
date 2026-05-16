@@ -1,65 +1,17 @@
-import { useState, useEffect } from "react";
-import { TICKER, TODAY_MATCHES, READY_JOBS } from "../data/mockData";
-import { apiFetch } from "../lib/api";
+import { TICKER } from "../data/mockData";
 import { useJobListings, normalizeAdzunaJob } from "../hooks/useJobListings";
 
 function ScoreColor(n) {
-  return n >= 90 ? "var(--green)" : n >= 80 ? "var(--amber)" : "var(--red)";
+  return n >= 70 ? "var(--green)" : n >= 40 ? "var(--amber)" : "var(--red)";
 }
 
-const STATUS_MSG = {
-  thinking:     "Finding your matches…",
-  tool_calling: "Searching job boards…",
-  done:         null,
-  error:        "Couldn't load live jobs — showing examples",
-};
-
 export default function Home({ onNav }) {
-  const [liveJobs, setLiveJobs]       = useState(null);
-  const [agentStatus, setAgentStatus] = useState("thinking");
   const { jobs: adzunaJobs, loading: adzunaLoading, newCount, refresh, clearNewCount } = useJobListings();
 
-  useEffect(() => {
-    apiFetch("/find-jobs")
-      .then(async res => {
-        if (!res.ok || !res.body) throw new Error(`server ${res.status}`);
-        const reader = res.body.getReader();
-        const dec    = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          const lines = buf.split("\n"); buf = lines.pop();
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const ev = JSON.parse(line);
-              if (ev.type === "status") {
-                setAgentStatus(ev.content);
-              } else if (ev.type === "final") {
-                try {
-                  const parsed = JSON.parse(ev.content);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setLiveJobs(parsed.map((j, i) => ({ ...j, id: i + 1 })));
-                  }
-                } catch {}
-              } else if (ev.type === "error") {
-                setAgentStatus("error");
-              }
-            } catch {}
-          }
-        }
-      })
-      .catch(() => setAgentStatus("error"));
-  }, []);
-
-  const isLoading   = agentStatus === "thinking" || agentStatus === "tool_calling";
-  const statusMsg   = STATUS_MSG[agentStatus] ?? null;
-  const allJobs     = liveJobs ?? [];
-  const matchJobs   = allJobs.length > 0 ? allJobs.slice(0, 3)    : TODAY_MATCHES;
-  const readyJobs   = allJobs.length > 3 ? allJobs.slice(3)       : READY_JOBS;
-  const usingLive   = liveJobs !== null && liveJobs.length > 0;
+  const topMatches = [...adzunaJobs]
+    .filter(j => j.compatibility_score != null)
+    .sort((a, b) => b.compatibility_score - a.compatibility_score)
+    .slice(0, 3);
 
   return (
     <div>
@@ -95,35 +47,19 @@ export default function Home({ onNav }) {
       </div>
 
       <div className="home-body">
-        <div className="stats-row u1">
-          {[
-            { n:5,     l:"Applications",  c:"sblue"   },
-            { n:1,     l:"Interviews",    c:"spurple"  },
-            { n:3,     l:"New matches",   c:"sgreen"   },
-            { n:"62%", l:"Profile score", c:"samber"   },
-          ].map(s => (
-            <div key={s.l} className={`stat-card ${s.c}`}>
-              <div className="stat-num">{s.n}</div>
-              <div className="stat-lbl">{s.l}</div>
-            </div>
-          ))}
-        </div>
 
         <div className="u2">
           <div className="sec-head">
-            <h2>✨ Today's matches</h2>
-            {statusMsg && (
+            <h2>✨ Top matches</h2>
+            {adzunaLoading && topMatches.length === 0 && (
               <span style={{fontSize:12, color:"var(--muted)", display:"flex", alignItems:"center", gap:6}}>
-                {isLoading && <span className="mc-new-dot" style={{animation:"pulse 1.2s ease-in-out infinite"}}/>}
-                {statusMsg}
+                <span className="mc-new-dot" style={{animation:"pulse 1.2s ease-in-out infinite"}}/>
+                Loading matches…
               </span>
-            )}
-            {usingLive && !isLoading && (
-              <span style={{fontSize:12, color:"var(--green)"}}>✓ Live results</span>
             )}
           </div>
           <div className="match-grid">
-            {isLoading && liveJobs === null
+            {adzunaLoading && topMatches.length === 0
               ? [1,2,3].map(i => (
                   <div key={i} className="match-card" style={{opacity:0.5}}>
                     <div className="mc-top">
@@ -134,52 +70,43 @@ export default function Home({ onNav }) {
                     <div style={{height:12,background:"var(--border2)",borderRadius:4,width:"50%"}}/>
                   </div>
                 ))
-              : matchJobs.map(job => (
-                  <div key={job.id} className="match-card">
-                    <div className="mc-top">
-                      <div className="mc-logo">{job.logo ?? "💼"}</div>
-                      <div style={{textAlign:"right"}}>
-                        <div className="mc-pct" style={{color: ScoreColor(job.match)}}>{job.match}%</div>
-                        <div className="mc-pct-lbl">match</div>
-                      </div>
-                    </div>
-                    <div className="mc-role">{job.role}</div>
-                    <div className="mc-co">{job.company} · {job.location}</div>
-                    <div className="mc-tags">
-                      {(job.tags ?? []).map(t => <span key={t} className="chip chip-p">{t}</span>)}
-                      {job.isNew && <span className="chip chip-g">New</span>}
-                    </div>
-                    <div className="mc-foot">
-                      <span className="mc-sal">{job.salary}</span>
-                      <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"var(--muted)"}}>
-                        <div className="mc-new-dot"/>{job.posted}
-                      </div>
-                    </div>
+              : topMatches.length === 0
+              ? (
+                  <div style={{color:"var(--muted)", fontSize:13, gridColumn:"1/-1", padding:"16px 0"}}>
+                    No scored matches yet — click Refresh to analyze your listings.
                   </div>
-                ))
+                )
+              : topMatches.map(job => {
+                  const j = normalizeAdzunaJob(job);
+                  return (
+                    <div key={job.id} className="match-card">
+                      <div className="mc-top">
+                        <div className="mc-logo">💼</div>
+                        <div style={{textAlign:"right"}}>
+                          <div className="mc-pct" style={{color: ScoreColor(job.compatibility_score)}}>{job.compatibility_score}%</div>
+                          <div className="mc-pct-lbl">match</div>
+                        </div>
+                      </div>
+                      <div className="mc-role">{j.role}</div>
+                      <div className="mc-co">{j.company} · {j.location}</div>
+                      <div className="mc-tags">
+                        {j.tags.map(t => <span key={t} className="chip chip-p">{t}</span>)}
+                        {j.isNew && <span className="chip chip-g">New</span>}
+                      </div>
+                      <div className="mc-foot">
+                        <span className="mc-sal">{j.salary}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"var(--muted)"}}>
+                          <div className="mc-new-dot"/>{j.posted}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
             }
           </div>
           <div style={{marginBottom:32}}/>
         </div>
 
-        <div className="u3">
-          <div className="sec-head"><h2>🚀 Ready to apply</h2></div>
-          <div className="apply-list">
-            {readyJobs.map(job => (
-              <div key={job.id} className="apply-card">
-                <div className="apply-logo">{job.logo ?? "💼"}</div>
-                <div className="apply-info">
-                  <div className="apply-role">{job.role}</div>
-                  <div className="apply-sub">{job.company} · {job.location} · {job.salary}</div>
-                </div>
-                <div className="apply-right">
-                  <div className="apply-pct">{job.match}%</div>
-                  <button className="apply-action">Apply now →</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         <div className="u4">
           <div className="sec-head">
