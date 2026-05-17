@@ -22,7 +22,7 @@ const Spinner = () => (
 );
 
 function Shell() {
-  const [page, setPage]                   = useState("home");
+  const [page, setPage]                   = useState("profile");
   const [profileComplete, setProfileComplete] = useState(null); // null = checking
   const { user, loading, signOut } = useAuth();
 
